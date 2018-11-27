@@ -10,7 +10,7 @@ all:
 
 deploy:
 	@echo "Pushing to production"
-	@git push git@example.com:~/testapp master
+	@git push production master
 
 update:
 	@echo "Makefile: Doing UPDATE stuff like grunt, gulp, rake,..."
