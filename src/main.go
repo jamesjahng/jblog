@@ -1,46 +1,53 @@
 package main
 
 import (
-	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
-	"net/http"
+	"os"
 )
 
-const (
-	WebRoot = "./web_root/"
-)
-
-func rootHandler(w http.ResponseWriter, r *http.Request) {
-	// when request is root, send index.html
-	// otherwise, send the file
-
-	log.Println(r.URL.Path)
-
-	path := r.URL.Path[len("/"):]
-
-	source, err := ioutil.ReadFile(WebRoot + path)
-	if err != nil {
-		source, err = ioutil.ReadFile(WebRoot + path + "/index.html")
-		if err != nil {
-			// Redirect to 404 page
-			w.WriteHeader(http.StatusNotFound)
-			fmt.Fprint(w, err)
-			log.Println("(rootHandler) ", err)
-			return
-		}
-	}
-
-	// Set content type as css if required file's extension is css
-	if len(path) >= 4 && path[len(path)-4:] == ".css" {
-		w.Header().Set("Content-Type", "text/css")
-	}
-
-	fmt.Fprint(w, string(source))
-	log.Println("(rootHandler) The requested file has been sent: ", WebRoot+path)
-}
+// Command-line options:
+//   -production : enables HTTPS on port 443
+//   -redirect-to-https : redirect HTTP to HTTTPS
 
 func main() {
-	http.HandleFunc("/", rootHandler)
-	log.Fatal(http.ListenAndServe(":80", nil))
+	// Set Logger
+	f, err := os.OpenFile("log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("error opening file: %v", err)
+	}
+	defer f.Close()
+
+	mw := io.MultiWriter(os.Stdout, f)
+	log.SetOutput(mw)
+	log.Println("Logger is ready.")
+
+	m := make(HandlerMap)
+	m["/"] = rootHandler
+	m["/line_notify"] = lineNotifyHandler
+
+	allowedHosts := []string{
+		"live.myeongjae.kim",
+		"book.myeongjae.kim",
+	}
+
+	parseFlags()
+	httpSrv, httpsSrv := setServers(m, allowedHosts)
+	if httpSrv == nil {
+		log.Fatalln("(main) http server cannot be ready to run.")
+	}
+
+	if httpsSrv != nil {
+		go func() {
+			log.Printf("Starting HTTPS server on %s\n", httpsSrv.Addr)
+			if err := httpsSrv.ListenAndServeTLS("", ""); err != nil {
+				log.Fatalf("httpsSrv.ListenAndServeTLS() failed with %s", err)
+			}
+		}()
+	}
+
+	log.Printf("Starting HTTP server on %s\n", httpSrv.Addr)
+	if err := httpSrv.ListenAndServe(); err != nil {
+		log.Fatalf("httpSrv.ListenAndServe() failed with %s", err)
+	}
 }
