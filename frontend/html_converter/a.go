@@ -115,7 +115,7 @@ func GetArticleMetadata(htmlPaths []string) []ArticleMetadata {
 		to := bytes.Index(htmlSource, []byte("</h1>"))
 
 		// Get Uri
-		uri := strings.Replace(htmlPath, "../home/public/blog_contents/", "/blog-example/", 1)
+		uri := strings.Replace(htmlPath, "../home/public/blog_contents/", "/blog/", 1)
 		uri = strings.Replace(uri, ".html", "/", 1)
 
 		// Get date
