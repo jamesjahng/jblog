@@ -13,24 +13,19 @@ import (
 )
 
 type ArticleMetadata struct {
-	Title  string `json:"title"`
-	Author string `json:"author"`
-	Uri    string `json:"uri"`
-	Date   string `json:"date"`
+	Title string `json:"title"`
+	Uri   string `json:"uri"`
+	Date  string `json:"date"`
 }
 
 const (
 	EXT_HTML          string = ".html"
 	EXT_MD            string = ".md"
 	DirPrefix         string = "../home/public/blog_contents"
-	BookPath          string = "blog_contents/book_think"
-	DevPath           string = "blog_contents/dev_record"
-	PathBookThinkBlog string = "../home/src/components/BookThinkBlog.vue"
-	PathDevRecordBlog string = "../home/src/components/DevRecordBlog.vue"
+	PathBlogComponent string = "../home/src/components/Blog.vue"
 )
 
-var bookArticles []string
-var devArticles []string
+var articles []string
 
 func execRmOldHtml(path string) {
 	if (len(path) > len(EXT_HTML)) &&
@@ -74,13 +69,9 @@ func execPandocMdToHtml(path string) {
 		}
 		//log.Printf("pandoc output: %q\n", out.String())
 
-		if strings.Contains(path, BookPath) {
-			bookArticles = append(bookArticles, path[0:len(path)-len(EXT_MD)]+EXT_HTML)
-			log.Printf("generated document: %q\n", result)
-		} else if strings.Contains(path, DevPath) {
-			devArticles = append(devArticles, path[0:len(path)-len(EXT_MD)]+EXT_HTML)
-			log.Printf("generated document: %q\n", result)
-		}
+		articles = append(articles, path[0:len(path)-len(EXT_MD)]+EXT_HTML)
+
+		log.Printf("generated document: %q\n", result)
 	}
 }
 
@@ -111,59 +102,36 @@ func GetArticleMetadata(htmlPaths []string) []ArticleMetadata {
 	r := regexp.MustCompile("(19|20)[0-9][0-9][- /.](0[1-9]|1[012])[- /.](0[1-9]|[12][0-9]|3[01])")
 
 	var metadata []ArticleMetadata
-	var uri string
 
 	for _, htmlPath := range htmlPaths {
+		// Get title
 		htmlSource, err := ioutil.ReadFile(htmlPath)
 		if err != nil {
 			log.Fatal(err.Error())
 		}
 
-		// Get title
-		titleFrom := bytes.Index(htmlSource, []byte(">"))
-		titleFrom += len(">")
-		titleTo := bytes.Index(htmlSource, []byte("</h1>"))
+		from := bytes.Index(htmlSource, []byte(">"))
+		from += len(">")
+		to := bytes.Index(htmlSource, []byte("</h1>"))
 
-		// Get author, get first ">" after title
-		authorFromTemp := titleTo + len("</h1>")
-		authorFrom := bytes.Index(htmlSource[authorFromTemp:], []byte(">"))
-		authorFrom += len(">")
-		authorFrom += authorFromTemp
-		authorTo := bytes.Index(htmlSource, []byte("</h2>"))
-		fmt.Println(authorTo == -1)
 		// Get Uri
-		if strings.Contains(htmlPath, BookPath) {
-			uri = strings.Replace(htmlPath, "../home/public/blog_contents/book_think/", "/bookThinkBlog/", 1)
-			uri = strings.Replace(uri, ".html", "/", 1)
-		} else if strings.Contains(htmlPath, DevPath) {
-			uri = strings.Replace(htmlPath, "../home/public/blog_contents/dev_record/", "/devRecordBlog/", 1)
-			uri = strings.Replace(uri, ".html", "/", 1)
-		}
+		uri := strings.Replace(htmlPath, "../home/public/blog_contents/", "/blog-example/", 1)
+		uri = strings.Replace(uri, ".html", "/", 1)
 
 		// Get date
 		date := r.FindString(htmlPath)
 
-		// if authorTo is -1, it's devRecordBlog
-		if authorTo == -1 {
-			metadata = append(metadata, ArticleMetadata{
-				Title:  string(htmlSource[titleFrom:titleTo]),
-				Author: "myself",
-				Uri:    uri,
-				Date:   date,
-			})
-		} else {
-			metadata = append(metadata, ArticleMetadata{
-				Title:  string(htmlSource[titleFrom:titleTo]),
-				Author: string(htmlSource[authorFrom:authorTo]),
-				Uri:    uri,
-				Date:   date,
-			})
-		}
+		metadata = append(metadata, ArticleMetadata{
+			Title: string(htmlSource[from:to]),
+			Uri:   uri,
+			Date:  date,
+		})
 	}
+
 	return metadata
 }
 
-func insertJsonToBlogComponent(json string, PathBlogComponent string) {
+func insertJsonToBlogComponent(json string) {
 	componentSourceBytes, err := ioutil.ReadFile(PathBlogComponent)
 	if err != nil {
 		log.Fatal(err)
@@ -184,6 +152,7 @@ func insertJsonToBlogComponent(json string, PathBlogComponent string) {
 	fmt.Println("-- old json end -- ")
 
 	componentSource = componentSource[0:from] + json + componentSource[to+1:]
+	fmt.Println(componentSource)
 
 	ioutil.WriteFile(PathBlogComponent, []byte(componentSource), 0644)
 }
@@ -196,21 +165,17 @@ func main() {
 	}
 	iterate(DirPrefix, dirInfo)
 
-	fmt.Println("\n\n bookArticles \n\n")
-	for _, bookArticle := range bookArticles {
-		fmt.Println(bookArticle)
-	}
-
-	fmt.Println("\n\n devArticles \n\n")
-	for _, devArticle := range devArticles {
-		fmt.Println(devArticle)
+	fmt.Println("\n\n articles \n\n")
+	for _, article := range articles {
+		fmt.Println(article)
 	}
 
 	// Reverse articles' order
 	i := 0
-	k := len(bookArticles) - 1
+	k := len(articles) - 1
 	for {
-		bookArticles[i], bookArticles[k] = bookArticles[k], bookArticles[i]
+		articles[i], articles[k] = articles[k], articles[i]
+
 		i++
 		k--
 		if i >= k {
@@ -218,35 +183,15 @@ func main() {
 		}
 	}
 
-	i = 0
-	k = len(devArticles) - 1
-	for {
-		devArticles[i], devArticles[k] = devArticles[k], devArticles[i]
-		i++
-		k--
-		if i >= k {
-			break
-		}
-	}
+	metadata := GetArticleMetadata(articles)
 
-	bookMetadata := GetArticleMetadata(bookArticles)
-	devMetadata := GetArticleMetadata(devArticles)
-
-	bb, err := json.Marshal(bookMetadata)
+	b, err := json.Marshal(metadata)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	db, err := json.Marshal(devMetadata)
-	if err != nil {
-		log.Fatal(err)
-	}
+	fmt.Println("\n\n json \n\n")
+	fmt.Println(string(b))
 
-	fmt.Println("\n\n book json \n\n")
-	fmt.Println(string(bb))
-
-	fmt.Println("\n\n dev json \n\n")
-	fmt.Println(string(db))
-	insertJsonToBlogComponent(string(bb), string(PathBookThinkBlog))
-	insertJsonToBlogComponent(string(db), string(PathDevRecordBlog))
+	insertJsonToBlogComponent(string(b))
 }
