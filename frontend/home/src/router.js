@@ -7,16 +7,22 @@ import Blog from './components/Blog.vue'
 Vue.use(Router)
 
 export default new Router({
+  mode: 'history',
   routes: [
     {
       path: '/',
-      name :'About',
+      name: 'About',
       component: About
     },
     {
       path: '/blog',
-      name :'Blog',
-      component: Blog
-    },
+      name: 'Blog',
+      component: Blog,
+      children: [
+        {
+          path: ':year/:month/:day/:title'
+        }
+      ]
+    } 
   ]
 });
